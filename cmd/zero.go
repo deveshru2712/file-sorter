@@ -34,6 +34,18 @@ func SortFile(filePath string) {
 		// print the folder that i need to create
 		res := foldersToCreate(filePath)
 		for _, ext := range res {
+
+			// check if folder already exists
+			folderPath := filepath.Join(filePath, ext)
+			if _, err := os.Stat(folderPath); err == nil {
+				// folder already exists, skip creating it
+				continue
+			} else if !os.IsNotExist(err) {
+				// some other error occurred while checking the folder
+				fmt.Printf("Error checking folder %s: %v\n", folderPath, err)
+				return
+			}
+
 			// creating those folder the same dir
 			newFilePath := filepath.Join(filePath, ext)
 			err := os.Mkdir(newFilePath, 0755)
@@ -43,12 +55,61 @@ func SortFile(filePath string) {
 			}
 		}
 
-		fmt.Println("folders created")
+		// moving the files to those folders
+		files, err := os.ReadDir(filePath)
+		if err != nil {
+			fmt.Printf("Error occurred while reading the dir %s", filePath)
+			return
+		}
+
+		for _, f := range files {
+			// if it is a folder then skip it
+			if f.IsDir() {
+				continue
+			}
+
+			src := filepath.Join(filePath, f.Name())
+			dist, err := getDestination(src)
+			if err != nil {
+				fmt.Printf("Error getting destination for file %s: %v\n", src, err)
+				continue
+			}
+			err = moveFile(src, dist)
+			if err != nil {
+				fmt.Printf("Error moving file %s to %s: %v\n", src, dist, err)
+				continue
+			}
+			fmt.Printf("Moved file %s to %s\n", src, dist)
+		}
+		fmt.Println("Sorting completed!")
 
 	} else {
 		// if path is for a file
 		fmt.Println("soon")
 	}
+}
+
+func getDestination(filePath string) (string, error) {
+	ext := filepath.Ext(filePath)
+	if ext == "" {
+		return "", fmt.Errorf("file has no extension")
+	}
+
+	folderName := getCategory(ext)
+	dist := filepath.Join(filepath.Dir(filePath), folderName, filepath.Base(filePath))
+	return dist, nil
+}
+
+func moveFile(src, dist string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(dist, input, 0644)
+	if err != nil {
+		return err
+	}
+	return os.Remove(src)
 }
 
 func isDirEmpty(filePath string) (bool, error) {
